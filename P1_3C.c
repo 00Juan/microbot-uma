@@ -158,3 +158,8 @@ void GPIOFIntHandler(void)
     }
     GPIOIntClear(GPIO_PORTF_BASE,ALL_BUTTONS);  //limpiamos flags
 }
+
+void Timer0A_Handler(void) {
+  //Añadida para que no de fallo al linkear
+}
+
