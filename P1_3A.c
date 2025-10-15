@@ -218,27 +218,6 @@ int main(void){
 
 
 
-/*
- *  if(ui32DutyCycle1 < COUNT_2MS && ui32DutyCycle2 > COUNT_1MS) //El ciclo de trabajo aun no esta en el maximo
-        {
-            ui32DutyCycle1 += CYCLE_INCREMENTS;
-            ui32DutyCycle2 -= CYCLE_INCREMENTS;
-            if(ui32DutyCycle1 > COUNT_2MS || ui32DutyCycle2 < COUNT_1MS) //Si el incremento hace que el ciclo supere el max le asignamos el max.
-            {
-                ui32DutyCycle1 = COUNT_2MS;
-                ui32DutyCycle2 = COUNT_1MS;
-            }
-            PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6, ui32DutyCycle1); //Imponemos el nuevo ciclo de trabajo.
-            PWMPulseWidthSet(PWM1_BASE, PWM_OUT_7, ui32DutyCycle2);
-        }
- */
-
-
-
-
-
-
-
 
 // Rutinas de interrupci�n de pulsadores
 // Boton Izquierdo: modifica  ciclo de trabajo en CYCLE_INCREMENTS para el servo conectado a PF2, hasta llegar a  COUNT_1MS
