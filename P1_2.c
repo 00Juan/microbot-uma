@@ -9,16 +9,16 @@
    DESCRIPCI�N:
     Genera dos ondas PWM a 50Hz (20ms) por los pines PF2 y PF3.
     La PWM por PF3 se pondr� (de momento) con un ciclo de trabajo fijo de 
-	1.5ms (parado)
+    1.5ms (parado)
     La PWM por PF2 se inicia con un ciclo de trabajo de 1.5ms (STOPCOUNT, 
-	servo parado o pr�cticamente parado)
+    servo parado o pr�cticamente parado)
     Al pulsar los botones el ciclo aumenta/disminuye en CYCLE_ INCREMENTS 
     Los m�rgenes te�ricos del servo est�n entre 1ms-2m (COUNT_1MS-COUNT_2MS)
 
     Si nada mas empezar el servo esta pr�cticamente parado (o se para con 
-	2-3 pulsaciones de uno u otro bot�n), se
+    2-3 pulsaciones de uno u otro bot�n), se
     considera calibrado. Si no, se tendr� que abrir y calibrar mediante el 
-	potenci�metro interno.
+    potenci�metro interno.
 
   **************************************************************************   */
 #include <stdint.h>
@@ -41,9 +41,9 @@
 #include "inc/hw_ints.h" // Definiciones de interrupciones
 
 
-#define PERIOD_PWM 12499 // (625KHz/50 Hz) -1	// TODO: Ciclos de reloj para conseguir una se�al peri�dica de 50Hz (seg�n reloj de perif�rico usado)
+#define PERIOD_PWM 12499 // (625KHz/50 Hz) -1   // TODO: Ciclos de reloj para conseguir una se�al peri�dica de 50Hz (seg�n reloj de perif�rico usado)
                             // PERIOD_PWM se obtendr�a como (pwm_clk / 50) - 1);  donde 50 es la frecuencia a obtener; y pwm_clk es la frecuencia de reloj del modulo PWM/Timer
-							// (se determina con SysCtlClockSet y  SysCtlPWMClockSet en el generador PWM; y SysCtlClockSet y las funciones de preescalado en los timers)
+                            // (se determina con SysCtlClockSet y  SysCtlPWMClockSet en el generador PWM; y SysCtlClockSet y las funciones de preescalado en los timers)
 #define COUNT_1MS 624   // TODO: Ciclos en el ciclo de trabajo para amplitud de pulso de 1ms (max velocidad en un sentido)
 #define STOPCOUNT 949 // (625KHz *1.52ms) -1 = 949 // TODO: Ciclos en el ciclo de trabajo  para amplitud de pulso de parada (1.52ms)
 #define COUNT_2MS 1249   // TODO: Ciclos en el ciclo de trabajo  para amplitud de pulso de 2ms (max velocidad en el otro sentido)
@@ -62,8 +62,8 @@ uint32_t ui32DutyCycle2; //Variable que alamcenaran el ciclo de trabajo(entre 1 
 int main(void){
     // uint32_t ui32Period; // Variable que alamcenaran el numero de ciclos de reloj para el periodo(20ms)
     // uint32_t pwm_clk;
-    ui32DutyCycle1 = (COUNT_2MS + STOPCOUNT)/2; // Inicializo el ciclo de trabajo al estado de reposo del servo.
-    ui32DutyCycle2 = (STOPCOUNT + COUNT_1MS)/2;
+    ui32DutyCycle1 = STOPCOUNT; // Inicializo el ciclo de trabajo al estado de reposo del servo.
+    ui32DutyCycle2 = STOPCOUNT;
 
     SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ); // Reloj del sistema a 40MHz;     // Elegir reloj adecuado para los valores de ciclos sean de tama�o soportable (cantidades menores de 16bits). Max frecuencia: 80MHz
 
@@ -74,9 +74,9 @@ int main(void){
         IntEnable(INT_GPIOF);
 
   // Configuracion  ondas PWM: frecuencia 50Hz, anchura inicial= valor STOPCOUNT, 1520us para salida por PF2, y COUNT_STOP para salida por PF3(o puedes poner otro valor si quieres que se mueva)
-  	// Opcion 1: Usar un Timer en modo PWM (ojo! Los timers PWM solo soportan cuentas 
+    // Opcion 1: Usar un Timer en modo PWM (ojo! Los timers PWM solo soportan cuentas
     //  de 16 bits, a menos que us�is un prescaler/timer extension)
-  	// Opcion 2: Usar un m�dulo PWM(no dado en Sist. Empotrados pero mas sencillo)
+    // Opcion 2: Usar un m�dulo PWM(no dado en Sist. Empotrados pero mas sencillo)
     //  SysCtlPWMClockSet(???);
 
 
@@ -127,12 +127,12 @@ void GPIOFIntHandler(void)
     int32_t i32Status = GPIOIntStatus(GPIO_PORTF_BASE,ALL_BUTTONS);
     // Boton Izquierdo: reduce ciclo de trabajo en CYCLE_INCREMENTS para el servo conectado a PF4, hasta llegar a MINCOUNT
     if(((i32Status & LEFT_BUTTON) == LEFT_BUTTON)){
-        if(ui32DutyCycle1 > STOPCOUNT)
+        if(ui32DutyCycle1 > COUNT_1MS)
         {
             ui32DutyCycle1 -= CYCLE_INCREMENTS;
-            if(ui32DutyCycle1 < STOPCOUNT)
+            if(ui32DutyCycle1 < COUNT_1MS)
             {
-                ui32DutyCycle1 = STOPCOUNT;
+                ui32DutyCycle1 = COUNT_1MS;
             }
             PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6, ui32DutyCycle1);
         }
@@ -152,7 +152,7 @@ void GPIOFIntHandler(void)
     GPIOIntClear(GPIO_PORTF_BASE,ALL_BUTTONS);  //limpiamos flags
 }
 
+
 void Timer0A_Handler(void) {
   //Añadida para que no de fallo al linkear
 }
-
