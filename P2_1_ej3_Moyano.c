@@ -105,27 +105,10 @@ int main(void)
 	/* Bucle principal: lanzamos conversiones periódicamente y la ISR hace sobremuestreo y el procesamiento */
 	while(1)
 	{
-<<<<<<< Updated upstream
 		/* Iniciar una conversión; la ISR la recogerá */
 		ADCProcessorTrigger(ADC0_BASE, 1);
 		/* Espera corta: control de tasa de muestreo (ajusta si es necesario) */
 		SysCtlDelay(SysCtlClockGet() / 2000); /* ~0.5ms aproximado */
-=======
-   	  ADCIntClear(ADC0_BASE, 1); // Limpia el flag de interrupcion del ADC
-	  // Dispara una nueva secuencia de conversiones
-    	  ADCProcessorTrigger(ADC0_BASE, 1);
-	  // Espera a que finalice la conversion (esto no har�a falta si se utilizasen interrupciones, ya que la interrrupci�n se
-       // produce cuando finaliza la conversi�n)
-        while(!ADCIntStatus(ADC0_BASE, 1, false))
-	  {}
-   	  // Tras haber finalizado la conversion, leemos los datos del secuenciador a un array
-    	  ADCSequenceDataGet(ADC0_BASE, 1, ui32ADC0Value);
-    	  // Calculamos la temperatura media como la media de las muestras de los 4 conversores
-    	  ui32TempAvg = (ui32ADC0Value[0] + ui32ADC0Value[1] + ui32ADC0Value[2] + ui32ADC0Value[3] + 2)/4;
-    	  // Y lo convertimos a grados centigrados y Farenheit, usando la formula indicada en el Data Sheet
-	  ui32TempValueC = (1475 - ((2475 * ui32TempAvg)) / 4096)/10;
-	  ui32TempValueF = ((ui32TempValueC * 9) + 160) / 5;
->>>>>>> Stashed changes
 	}
 }
 
