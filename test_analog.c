@@ -12,6 +12,9 @@
 
 #define ADC1_THRESHOLD 1985  // Threshold for ADC1 (PD1/AIN6) //rueda izquierda 1.6
 
+#define NUM_STEPS_PER_TURN_RD 18  // Threshold for ADC1 (PD1/AIN6) //rueda izquierda 1.6
+#define NUM_STEPS_PER_TURN_RI 18  // Threshold for ADC1 (PD1/AIN6) //rueda izquierda 1.6
+
 // ===================== Global Variables =====================
 volatile uint32_t adc0Value;
 volatile uint32_t adc1Value;
@@ -26,9 +29,24 @@ volatile bool adc1FallingEdge = false;
 volatile uint32_t adc0Prev = 0;
 volatile uint32_t adc1Prev = 0;
 
+volatile uint32_t counterRD = 0;
+volatile uint32_t counterRI = 0;
+volatile uint32_t counterWholeTurnsRD = 0;
+volatile uint32_t counterWholeTurnsRI = 0;
+
 
 // Previous values for edge detection
 
+
+
+
+#define ADC_FILTER_SAMPLES 100
+
+// Filter buffers and sums
+volatile uint32_t adc0Buffer[ADC_FILTER_SAMPLES] = {0};
+volatile uint32_t adc1Buffer[ADC_FILTER_SAMPLES] = {0};
+volatile uint32_t adc0Sum = 0, adc1Sum = 0;
+volatile uint8_t adc0Index = 0, adc1Index = 0;
 
 // ===================== Function Prototypes =====================
 void ADC0Seq3_Handler(void);
@@ -72,16 +90,16 @@ int main(void)
 
 
     char cColor;
-       uint32_t pui32Color[3];
-       /* The parameters are not used. */
+    uint32_t pui32Color[3];
+    /* The parameters are not used. */
 
 
-       //Inicializa los LEDs...
-       RGBInit(1);
+    //Inicializa los LEDs...
+    RGBInit(1);
 
-       SysCtlPeripheralSleepEnable(GREEN_TIMER_PERIPH); // Los Timers de PWM  tienen que seguir funcionando
-       SysCtlPeripheralSleepEnable(BLUE_TIMER_PERIPH);  // aunque el micro este dormido
-       SysCtlPeripheralSleepEnable(RED_TIMER_PERIPH);   // Redundante porque son el mismo, pero bueno...
+    SysCtlPeripheralSleepEnable(GREEN_TIMER_PERIPH); // Los Timers de PWM  tienen que seguir funcionando
+    SysCtlPeripheralSleepEnable(BLUE_TIMER_PERIPH);  // aunque el micro este dormido
+    SysCtlPeripheralSleepEnable(RED_TIMER_PERIPH);   // Redundante porque son el mismo, pero bueno...
 
 
 
@@ -89,70 +107,112 @@ int main(void)
     // ---- Main loop ----
     while(1)
     {
+        static uint8_t checkEdge=0;
         // Trigger ADC conversions
         ADCProcessorTrigger(ADC0_BASE, 3);
         ADCProcessorTrigger(ADC0_BASE, 2);
 
         // Small delay (~10 ms)
-       // SysCtlDelay(SysCtlClockGet()/100);
+         //SysCtlDelay(SysCtlClockGet()/100);
 
         // Example: handle edge events
         if(adc0RisingEdge)
         {
+
             adc0RisingEdge = false;
-            pui32Color[0]=0xFFFF;
-                           pui32Color[1]=0;
-                           pui32Color[2]=0;
-                           RGBColorSet(pui32Color);
+
+
             // Handle rising event for ADC0
         }
         if(adc0FallingEdge)
         {
             adc0FallingEdge = false;
-            pui32Color[0]=0;
-                           pui32Color[1]=0xFFFF;
-                           pui32Color[2]=0;
-                           RGBColorSet(pui32Color);
+//            pui32Color[0]=0;
+//            pui32Color[1]=0xFFFF;
+//            pui32Color[2]=0;
+//            RGBColorSet(pui32Color);
             // Handle falling event for ADC0
         }
         if(adc1RisingEdge)
         {
             adc1RisingEdge = false;
-            pui32Color[0]=0xFFFF;
-                                       pui32Color[1]=0;
-                                       pui32Color[2]=0;
-                                       RGBColorSet(pui32Color);
+//            pui32Color[0]=0xFFFF;
+//            pui32Color[1]=0;
+//            pui32Color[2]=0;
+//            RGBColorSet(pui32Color);
+            counterRI++;
         }
         if(adc1FallingEdge)
         {
             adc1FallingEdge = false;
-            pui32Color[0]=0;
-                                      pui32Color[1]=0xFFFF;
-                                      pui32Color[2]=0;
-                                      RGBColorSet(pui32Color);
+//            pui32Color[0]=0;
+//            pui32Color[1]=0xFFFF;
+//            pui32Color[2]=0;
+//            RGBColorSet(pui32Color);
         }
+
+        if(adc0RisingEdge && checkEdge==0)
+        {
+            checkEdge=1;
+        }
+        else if(adc0FallingEdge && checkEdge==1)
+        {
+            static uint8_t flagLed=0;
+            checkEdge=0;
+            counterRD++;
+            counterWholeTurnsRD=counterRD/NUM_STEPS_PER_TURN_RD;
+            if(counterRD%NUM_STEPS_PER_TURN_RD==0)
+            {
+                if(flagLed==0)
+                {
+                    pui32Color[0]=0xFFFF;
+                    pui32Color[1]=0;
+                    pui32Color[2]=0;
+                    RGBColorSet(pui32Color);
+                    flagLed=1;
+                }
+                else
+                {
+                    pui32Color[0]=0;
+                    pui32Color[1]=0xFFFF;
+                    pui32Color[2]=0;
+                    RGBColorSet(pui32Color);
+                    flagLed=0;
+                }
+            }
+        }
+
+
     }
 }
 
 // ===================== ADC Handlers =====================
 
-// ADC0 Sequencer 3 -> PD0 -> AIN7
 void ADC0Seq3_Handler(void)
 {
     uint32_t temp;
     ADCIntClear(ADC0_BASE, 3);
     ADCSequenceDataGet(ADC0_BASE, 3, &temp);
-    adc0Value = temp;
+
+    // --- Simple moving average filter ---
+    adc0Sum -= adc0Buffer[adc0Index];  // remove oldest value
+    adc0Buffer[adc0Index] = temp;      // store new sample
+    adc0Sum += adc0Buffer[adc0Index];  // add new value
+    adc0Index = (adc0Index + 1) % ADC_FILTER_SAMPLES;
+
+    // Filtered value
+    uint32_t filteredValue = adc0Sum / ADC_FILTER_SAMPLES;
+    adc0Value = filteredValue;
 
     // Rising-edge detection
-    if(adc0Prev <= ADC0_THRESHOLD && adc0Value > ADC0_THRESHOLD)
+    if(adc0Prev <= ADC0_THRESHOLD && filteredValue > ADC0_THRESHOLD)
         adc0RisingEdge = true;
 
     // Falling-edge detection
-    if(adc0Prev > ADC0_THRESHOLD && adc0Value <= ADC0_THRESHOLD)
+    if(adc0Prev > ADC0_THRESHOLD && filteredValue <= ADC0_THRESHOLD)
         adc0FallingEdge = true;
 
-    adc0Prev = adc0Value;
+    adc0Prev = filteredValue;
 }
 
 // ADC0 Sequencer 2 -> PD1 -> AIN6
@@ -161,19 +221,27 @@ void ADC0Seq2_Handler(void)
     uint32_t temp;
     ADCIntClear(ADC0_BASE, 2);
     ADCSequenceDataGet(ADC0_BASE, 2, &temp);
-    adc1Value = temp;
+
+    // --- Simple moving average filter ---
+    adc1Sum -= adc1Buffer[adc1Index];  // remove oldest value
+    adc1Buffer[adc1Index] = temp;      // store new sample
+    adc1Sum += adc1Buffer[adc1Index];  // add new value
+    adc1Index = (adc1Index + 1) % ADC_FILTER_SAMPLES;
+
+    // Filtered value
+    uint32_t filteredValue = adc1Sum / ADC_FILTER_SAMPLES;
+    adc1Value = filteredValue;
 
     // Rising-edge detection
-    if(adc1Prev <= ADC1_THRESHOLD && adc1Value > ADC1_THRESHOLD)
+    if(adc1Prev <= ADC1_THRESHOLD && filteredValue > ADC1_THRESHOLD)
         adc1RisingEdge = true;
 
     // Falling-edge detection
-    if(adc1Prev > ADC1_THRESHOLD && adc1Value <= ADC1_THRESHOLD)
+    if(adc1Prev > ADC1_THRESHOLD && filteredValue <= ADC1_THRESHOLD)
         adc1FallingEdge = true;
 
-    adc1Prev = adc1Value;
+    adc1Prev = filteredValue;
 }
-
 
 
 void Timer0A_Handler()
