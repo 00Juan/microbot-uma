@@ -1,5 +1,4 @@
 /*
-<<<<<<< Updated upstream
 Ejercicio 3. Aplicación de respuesta a las lecturas del sensor. Tablas de look-up.
 
 La curva obtenida para los sensores IR en el apartado anterior tiene una expresión bastante
@@ -24,10 +23,6 @@ que hayas medido, y programa una aplicación que realice las siguientes acciones
 /*
  * Idealmente, se deberían usar interrupciones para "avisar" de que las muestran están disponibles, y recogerlas.
  * Además, es más adecuado usar un timer para disparar periodicamente el muestreo, ya que de lo contrario se ocupa mucho tiempo de CPU.
-=======
- * Idealmente, se deber�an usar interrupciones para "avisar" de que las muestran est�n disponibles, y recogerlas.
- * Adem�s, es m�s adecuado usar un timer para disparar periodicamente el muestreo, ya que de lo contrario se ocupa mucho tiempo de CPU.
->>>>>>> Stashed changes
  *
  *
  */
