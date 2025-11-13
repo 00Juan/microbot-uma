@@ -81,7 +81,11 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
+<<<<<<< Updated upstream
 						<entry excluding="P2_1_ej3_Moyano.c|P1_2.c|P1_3C.c|P1_3A.c|P1_3B.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+=======
+						<entry excluding="P2_1_ej1_Moyano.c|P1_2.c|P1_3C.c|P1_3A.c|P1_3B.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+>>>>>>> Stashed changes
 					</sourceEntries>
 				</configuration>
 			</storageModule>
