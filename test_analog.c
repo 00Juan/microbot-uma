@@ -94,8 +94,8 @@ uint32_t ui32DutyCycle1; //Variable que alamcenaran el ciclo de trabajo(entre 1 
 uint32_t ui32DutyCycle2; //Variable que alamcenaran el ciclo de trabajo(entre 1 y 2 ms)
 
 
-volatile uint32_t STOPCOUNT_RD =945;
-volatile uint32_t STOPCOUNT_RI =965;
+const uint32_t STOPCOUNT_RI =945;
+const uint32_t STOPCOUNT_RD =965;
 
 
 //**********CONTROL DEL ROBOT
@@ -159,6 +159,13 @@ volatile int32_t g_target_counts_RI = 0;
 // Contadores en el momento de *inicio* del movimiento
 volatile uint32_t g_start_counts_RD = 0;
 volatile uint32_t g_start_counts_RI = 0;
+
+
+// *** NUEVO: Almacena el DutyCycle de "movimiento" para cada rueda ***
+volatile uint32_t g_running_duty_RD = STOPCOUNT_RD;
+volatile uint32_t g_running_duty_RI = STOPCOUNT_RI;
+
+
 
 void Robot_Init(void);
 void mover_robot(float c);
@@ -449,9 +456,9 @@ void Timer0A_Handler(void) {
  */
 void Set_Motor_Speeds(uint32_t duty_RI, uint32_t duty_RD) {
     // Rueda Derecha (RD) -> ui32DutyCycle1 -> PWM_OUT_6
-    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6, duty_RD);
+    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6, duty_RI);
     // Rueda Izquierda (RI) -> ui32DutyCycle2 -> PWM_OUT_7
-    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_7, duty_RI);
+    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_7, duty_RD);
 }
 
 /**
@@ -466,34 +473,46 @@ void Robot_Init(void) {
  * @brief Inicia un movimiento recto del robot (No bloqueante).
  * @param c: Distancia en centímetros. (+) adelante, (-) atrás.
  */
+/**
+ * @brief Inicia un movimiento recto del robot (No bloqueante).
+ * @param c: Distancia en centímetros. (+) adelante, (-) atrás.
+ */
 void mover_robot(float c) {
     // No aceptar nuevos comandos si ya está ocupado
     if (g_robot_state != ROBOT_IDLE) {
         return;
     }
 
-    // Calcular pulsos objetivo
-    int32_t target_pulses = (int32_t)(c * PULSES_PER_CM);
+    // Calcular pulsos objetivo (siempre positivo)
+    uint32_t target_pulses = (uint32_t)(fabsf(c) * PULSES_PER_CM);
+
+    // Si el objetivo es 0, no hacer nada
+    if (target_pulses == 0) {
+        g_robot_state = ROBOT_IDLE;
+        return;
+    }
 
     // Guardar estado inicial y objetivos
-    // Usamos 'volatile' para asegurar que leemos el valor más actual
     g_start_counts_RD = counterRD;
     g_start_counts_RI = counterRI;
 
     g_target_counts_RD = target_pulses;
-    g_target_counts_RI = target_pulses; // Ambas ruedas la misma distancia
+    g_target_counts_RI = target_pulses;
 
-    // Iniciar movimiento
+    // Iniciar movimiento y ALMACENAR la dirección
     if (c > 0.0f) {
-        g_robot_state = ROBOT_MOVING;
-        Set_Motor_Speeds(FWD_DUTY, REV_DUTY);
-    } else if (c < 0.0f) {
-        g_robot_state = ROBOT_MOVING;
-        Set_Motor_Speeds(REV_DUTY, FWD_DUTY);
+        // Hacia adelante
+        g_running_duty_RD = FWD_DUTY;
+        g_running_duty_RI = REV_DUTY;
     } else {
-        // c == 0, no hacer nada
-        g_robot_state = ROBOT_IDLE;
+        // Hacia atrás (c < 0.0f)
+        g_running_duty_RD = REV_DUTY;
+        g_running_duty_RI = FWD_DUTY;
     }
+
+    // Establecer estado y aplicar velocidad inicial
+    g_robot_state = ROBOT_MOVING;
+    Set_Motor_Speeds(g_running_duty_RI, g_running_duty_RD);
 }
 
 /**
@@ -507,41 +526,44 @@ void girar_robot(float g) {
         return;
     }
 
-    // Calcular pulsos objetivo para el arco de giro
-    int32_t target_arc_pulses = (int32_t)(g * PULSES_PER_DEGREE);
+    // Calcular pulsos objetivo (siempre positivo)
+    uint32_t target_arc_pulses = (uint32_t)(fabsf(g) * PULSES_PER_DEGREE);
 
-    // Guardar estado inicial
+    // Si el objetivo es 0, no hacer nada
+    if (target_arc_pulses == 0) {
+        g_robot_state = ROBOT_IDLE;
+        return;
+    }
+
+    // Guardar estado inicial y objetivos
     g_start_counts_RD = counterRD;
     g_start_counts_RI = counterRI;
 
+    g_target_counts_RD = target_arc_pulses;
+    g_target_counts_RI = target_arc_pulses;
+
+    // Iniciar movimiento y ALMACENAR las direcciones de giro
     if (g > 0.0f) {
         // Giro antihorario (izquierda)
         // Rueda derecha (RD) avanza, Rueda izquierda (RI) retrocede
-        g_target_counts_RD = target_arc_pulses;
-        g_target_counts_RI = target_arc_pulses;
-        Set_Motor_Speeds(REV_DUTY, REV_DUTY); // RI(REV), RD(FWD)
-        g_robot_state = ROBOT_TURNING;
-
-    } else if (g < 0.0f) {
-        // Giro horario (derecha)
-        // Rueda derecha (RD) retrocede, Rueda izquierda (RI) avanza
-        // target_arc_pulses ya será negativo
-        g_target_counts_RD = target_arc_pulses; // negativo
-        g_target_counts_RI = target_arc_pulses; // positivo
-        Set_Motor_Speeds(FWD_DUTY, FWD_DUTY); // RI(FWD), RD(REV)
-        g_robot_state = ROBOT_TURNING;
-
+        g_running_duty_RD = FWD_DUTY;
+        g_running_duty_RI = FWD_DUTY;
     } else {
-        // g == 0, no hacer nada
-        g_robot_state = ROBOT_IDLE;
+        // Giro horario (derecha) (g < 0.0f)
+        // Rueda derecha (RD) retrocede, Rueda izquierda (RI) avanza
+        g_running_duty_RD = REV_DUTY;
+        g_running_duty_RI = REV_DUTY;
     }
+
+    // Establecer estado y aplicar velocidad inicial
+    g_robot_state = ROBOT_TURNING;
+    Set_Motor_Speeds(g_running_duty_RI, g_running_duty_RD);
 }
 
 /**
- * @brief *** ¡¡FUNCIÓN CRÍTICA!! ***
- * Debe llamarse repetidamente en el bucle principal (main loop)
- * o desde una interrupción de temporizador (ej. SysTick).
+ * @brief *** ¡FUNCIÓN CRÍTICA CORREGIDA (versión 2)! ***
  * Comprueba si el robot ha alcanzado su objetivo y lo detiene.
+ * ASUME: counterRD y counterRI solo incrementan.
  */
 void Robot_Update(void) {
     // Si no estamos haciendo nada, salir rápido.
@@ -550,32 +572,57 @@ void Robot_Update(void) {
     }
 
     // Calcula los pulsos *transcurridos* desde el inicio del movimiento.
-    // Esta resta y casting (int32_t) maneja correctamente el
-    // desbordamiento (wraparound) de los contadores uint32_t,
-    // ¡SIEMPRE Y CUANDO la ISR decremente en reversa!
-    int32_t elapsed_RD = (int32_t)(counterRD - g_start_counts_RD);
-    int32_t elapsed_RI = (int32_t)(counterRI - g_start_counts_RI);
+    // Esta resta (uint32_t) maneja correctamente el desbordamiento (wraparound)
+    // siempre que counterRD/RI solo incrementen.
+    uint32_t elapsed_RD = counterRD - g_start_counts_RD;
+    uint32_t elapsed_RI = counterRI - g_start_counts_RI;
 
     bool done_RD = false;
     bool done_RI = false;
 
-    // --- Chequear Rueda Derecha (RD) ---
-    if (g_target_counts_RD >= 0) { // Objetivo positivo (avance)
-        if (elapsed_RD >= g_target_counts_RD) done_RD = true;
-    } else { // Objetivo negativo (reversa)
-        if (elapsed_RD <= g_target_counts_RD) done_RD = true;
+    // --- Chequear Ruedas (Lógica simplificada) ---
+    // Dado que 'elapsed' y 'target' son ambos uint32_t positivos,
+    // la comprobación es una simple comparación "mayor o igual que".
+    if (elapsed_RD >= g_target_counts_RD) {
+        done_RD = true;
+    }
+    if (elapsed_RI >= g_target_counts_RI) {
+        done_RI = true;
     }
 
-    // --- Chequear Rueda Izquierda (RI) ---
-    if (g_target_counts_RI >= 0) { // Objetivo positivo (avance)
-        if (elapsed_RI >= g_target_counts_RI) done_RI = true;
-    } else { // Objetivo negativo (reversa)
-        if (elapsed_RI <= g_target_counts_RI) done_RI = true;
+    // --- Lógica de Control Independiente ---
+    uint32_t next_duty_RD;
+    uint32_t next_duty_RI;
+
+    // --- Decidir Rueda Derecha (RD) ---
+    if (done_RD) {
+        // La rueda RD ha terminado, debe PARAR.
+        next_duty_RD = STOPCOUNT_RD;
+    } else {
+        // La rueda RD no ha terminado, debe SEGUIR MOVIÉNDOSE.
+        // ¿En qué dirección? En la que guardamos al inicio.
+        next_duty_RD = g_running_duty_RD;
     }
 
-    // --- Comprobar si AMBOS han terminado ---
+    // --- Decidir Rueda Izquierda (RI) ---
+    if (done_RI) {
+        // La rueda RI ha terminado, debe PARAR.
+        next_duty_RI = STOPCOUNT_RI;
+    } else {
+        // La rueda RI no ha terminado, debe SEGUIR MOVIÉNDOSE.
+        next_duty_RI = g_running_duty_RI;
+    }
+
+    // 2. Aplicar las velocidades (una podría ser STOP y la otra no)
+    Set_Motor_Speeds(next_duty_RI, next_duty_RD);
+
+    // 3. Comprobar si AMBOS han terminado para liberar la máquina de estados
     if (done_RD && done_RI) {
-        Set_Motor_Speeds(STOPCOUNT_RI, STOPCOUNT_RD); // ¡Parar!
-        g_robot_state = ROBOT_IDLE;             // Volver a estado inactivo
+        // Ambas ruedas están paradas, el robot está 'IDLE'.
+        g_robot_state = ROBOT_IDLE;
+
+        // Limpiar las direcciones "running" por seguridad
+        g_running_duty_RD = STOPCOUNT_RD;
+        g_running_duty_RI = STOPCOUNT_RI;
     }
 }
