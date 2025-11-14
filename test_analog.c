@@ -138,8 +138,8 @@ const uint32_t STOPCOUNT_RD =965;
 
 // Asume 1.5ms STOP, 2.0ms FWD, 1.0ms REV y un período de 20ms (50Hz)
 // 1.5ms / 20ms = 7.5% -> Duty = 0.075 * LOAD
-#define FWD_DUTY  (uint32_t)  849 // Ejemplo: 2.0ms (Avance)
-#define REV_DUTY  (uint32_t)    1049 // Ejemplo: 1.0ms (Reversa)
+#define FWD_DUTY  (uint32_t)  700 // Ejemplo: 2.0ms (Avance)
+#define REV_DUTY  (uint32_t)    1200 // Ejemplo: 1.0ms (Reversa)
 
 
 // --- Máquina de Estados del Robot ---
@@ -165,12 +165,24 @@ volatile uint32_t g_start_counts_RI = 0;
 volatile uint32_t g_running_duty_RD = STOPCOUNT_RD;
 volatile uint32_t g_running_duty_RI = STOPCOUNT_RI;
 
+// Añadir esto junto a tus otras variables globales
+
+typedef enum {
+    SEQ_IDLE,       // No hay ninguna secuencia activa
+    SEQ_SQUARE      // La secuencia "cuadrado" está activa
+} SequenceState;
+
+volatile SequenceState g_current_sequence = SEQ_IDLE;
+volatile uint8_t g_sequence_step = 0; // Para contar los 8 pasos (4x mover, 4x girar)
+
 
 
 void Robot_Init(void);
 void mover_robot(float c);
 void girar_robot(float g);
 void Robot_Update(void);
+void iniciar_secuencia_cuadrado(void);
+void Sequence_Update(void);
 
 
 int main(void)
@@ -271,7 +283,7 @@ int main(void)
     {
 
         Robot_Update();
-
+        Sequence_Update();
         // Trigger ADC conversions
         ADCProcessorTrigger(ADC0_BASE, 3);
         ADCProcessorTrigger(ADC0_BASE, 2);
@@ -352,99 +364,78 @@ int main(void)
 
 }
 
-// ===================== ADC Handlers =====================
 
-
-
-
-
-
-void ADC0Seq3_Handler(void)
-{
-    uint32_t temp;
-    ADCIntClear(ADC0_BASE, 3);
-    ADCSequenceDataGet(ADC0_BASE, 3, &temp);
-
-    // --- Simple moving average filter ---
-    adc0Sum -= adc0Buffer[adc0Index];
-    adc0Buffer[adc0Index] = temp;
-    adc0Sum += adc0Buffer[adc0Index];
-    adc0Index = (adc0Index + 1) % ADC_FILTER_SAMPLES;
-
-    uint32_t filteredValue = adc0Sum / ADC_FILTER_SAMPLES;
-    adc0Value = filteredValue;
-
-    // Hysteresis thresholds
-    uint32_t high = ADC0_THRESHOLD + ADC_HYSTERESIS;
-    uint32_t low  = ADC0_THRESHOLD - ADC_HYSTERESIS;
-
-    // Rising-edge detection with hysteresis
-    if(adc0Prev <= high && filteredValue > high)
-
-        adc0RisingEdge = true;
-
-    // Falling-edge detection with hysteresis
-    if(adc0Prev >= low && filteredValue < low)
-        adc0FallingEdge = true;
-
-    adc0Prev = filteredValue;
-}
-
-void ADC0Seq2_Handler(void)
-{
-    uint32_t temp;
-    ADCIntClear(ADC0_BASE, 2);
-    ADCSequenceDataGet(ADC0_BASE, 2, &temp);
-
-    // --- Simple moving average filter ---
-    adc1Sum -= adc1Buffer[adc1Index];
-    adc1Buffer[adc1Index] = temp;
-    adc1Sum += adc1Buffer[adc1Index];
-    adc1Index = (adc1Index + 1) % ADC_FILTER_SAMPLES;
-
-    uint32_t filteredValue = adc1Sum / ADC_FILTER_SAMPLES;
-    adc1Value = filteredValue;
-
-    // Hysteresis thresholds
-    uint32_t high = ADC1_THRESHOLD + ADC_HYSTERESIS;
-    uint32_t low  = ADC1_THRESHOLD - ADC_HYSTERESIS;
-
-    // Rising-edge detection with hysteresis
-    if(adc1Prev <= high && filteredValue > high)
-        adc1RisingEdge = true;
-
-    // Falling-edge detection with hysteresis
-
-    if(adc1Prev >= low && filteredValue < low)
-        adc1FallingEdge = true;
-
-    adc1Prev = filteredValue;
-}
-
-
-
-// Rutinas de interrupci�n de pulsadores
-// Boton Izquierdo: modifica  ciclo de trabajo en CYCLE_INCREMENTS para el servo conectado a PF2, hasta llegar a  COUNT_1MS
-// Boton Derecho: modifica  ciclo de trabajo en CYCLE_INCREMENTS para el servo conectado a PF2, hasta llegar a COUNT_2MS
-
-void GPIOFIntHandler(void)
-{
-    int32_t i32Status = GPIOIntStatus(GPIO_PORTF_BASE,ALL_BUTTONS);
-    // Boton Izquierdo: reduce ciclo de trabajo en CYCLE_INCREMENTS para el servo conectado a PF4, hasta llegar a MINCOUNT
-    if(((i32Status & LEFT_BUTTON) == LEFT_BUTTON)){
-        mover_robot(WHEEL_CIRCUMFERENCE_CM);
-
+/**
+ * @brief Inicia la secuencia de "hacer un cuadrado".
+ * La secuencia es (mover 10cm, girar 90º) x 4.
+ * Es NO bloqueante.
+ */
+void iniciar_secuencia_cuadrado(void) {
+    // No iniciar una nueva secuencia si el robot o otra secuencia ya están ocupados
+    if (g_robot_state != ROBOT_IDLE || g_current_sequence != SEQ_IDLE) {
+        return;
     }
-    // Boton Derecho: aumenta ciclo de trabajo en CYCLE_INCREMENTS para el servo conectado a PF4, hasta llegar a MAXCOUNT
-    if(((i32Status & RIGHT_BUTTON) == RIGHT_BUTTON)){ //Se ha pulsado boton derecho
-        girar_robot(360);
-    }
-    GPIOIntClear(GPIO_PORTF_BASE,ALL_BUTTONS);  //limpiamos flags
+
+    // Configurar la máquina de estados de secuencia
+    g_current_sequence = SEQ_SQUARE;
+    g_sequence_step = 0; // Estamos en el paso 0 (el primer movimiento)
+
+    // Lanzar la *primera* acción de la secuencia
+    mover_robot(50.0);
 }
 
-void Timer0A_Handler(void) {
-  //Añadida para que no de fallo al linkear
+
+/**
+ * @brief *** ¡FUNCIÓN CRÍTICA DE SECUENCIA! ***
+ * Debe llamarse repetidamente en el bucle principal (main loop)
+ * después de Robot_Update().
+ * Comprueba si la acción actual terminó y lanza la siguiente.
+ */
+void Sequence_Update(void) {
+    // Si no hay secuencia activa, no hacer nada.
+    if (g_current_sequence == SEQ_IDLE) {
+        return;
+    }
+
+    // Si el robot todavía está ocupado (moviéndose o girando),
+    // no hacer nada y esperar.
+    if (g_robot_state != ROBOT_IDLE) {
+        return;
+    }
+
+    // --- Si llegamos aquí, significa que: ---
+    // 1. Hay una secuencia activa (g_current_sequence != SEQ_IDLE)
+    // 2. El robot acaba de terminar su última acción (g_robot_state == ROBOT_IDLE)
+    //
+    // ¡Es hora de lanzar el siguiente paso!
+
+    g_sequence_step++; // Avanzamos al siguiente paso
+
+    // Lógica de la secuencia "Cuadrado"
+    if (g_current_sequence == SEQ_SQUARE) {
+
+        // La secuencia tiene 8 pasos en total (0-7):
+        // 0: move, 1: turn, 2: move, 3: turn, 4: move, 5: turn, 6: move, 7: turn
+
+        if (g_sequence_step == 1 || g_sequence_step == 3 || g_sequence_step == 5 || g_sequence_step == 7) {
+            // El robot acaba de TERMINAR un MOVIMIENTO (pasos 0, 2, 4, 6).
+            // Ahora TOCA GIRAR.
+            girar_robot(90.0); // Asumiendo +90º = giro a la izquierda
+
+        } else if (g_sequence_step == 2 || g_sequence_step == 4 || g_sequence_step == 6) {
+            // El robot acaba de TERMINAR un GIRO (pasos 1, 3, 5).
+            // Ahora TOCA MOVERSE.
+            mover_robot(50.0);
+
+        } else if (g_sequence_step >= 8) {
+            // El robot acaba de TERMINAR el último GIRO (paso 7).
+            // La secuencia se ha completado.
+            g_current_sequence = SEQ_IDLE;
+            g_sequence_step = 0;
+        }
+    }
 }
+
 
 
 
@@ -625,4 +616,96 @@ void Robot_Update(void) {
         g_running_duty_RD = STOPCOUNT_RD;
         g_running_duty_RI = STOPCOUNT_RI;
     }
+}
+
+
+
+// ===================== ADC Handlers =====================
+
+void ADC0Seq3_Handler(void)
+{
+    uint32_t temp;
+    ADCIntClear(ADC0_BASE, 3);
+    ADCSequenceDataGet(ADC0_BASE, 3, &temp);
+
+    // --- Simple moving average filter ---
+    adc0Sum -= adc0Buffer[adc0Index];
+    adc0Buffer[adc0Index] = temp;
+    adc0Sum += adc0Buffer[adc0Index];
+    adc0Index = (adc0Index + 1) % ADC_FILTER_SAMPLES;
+
+    uint32_t filteredValue = adc0Sum / ADC_FILTER_SAMPLES;
+    adc0Value = filteredValue;
+
+    // Hysteresis thresholds
+    uint32_t high = ADC0_THRESHOLD + ADC_HYSTERESIS;
+    uint32_t low  = ADC0_THRESHOLD - ADC_HYSTERESIS;
+
+    // Rising-edge detection with hysteresis
+    if(adc0Prev <= high && filteredValue > high)
+
+        adc0RisingEdge = true;
+
+    // Falling-edge detection with hysteresis
+    if(adc0Prev >= low && filteredValue < low)
+        adc0FallingEdge = true;
+
+    adc0Prev = filteredValue;
+}
+
+void ADC0Seq2_Handler(void)
+{
+    uint32_t temp;
+    ADCIntClear(ADC0_BASE, 2);
+    ADCSequenceDataGet(ADC0_BASE, 2, &temp);
+
+    // --- Simple moving average filter ---
+    adc1Sum -= adc1Buffer[adc1Index];
+    adc1Buffer[adc1Index] = temp;
+    adc1Sum += adc1Buffer[adc1Index];
+    adc1Index = (adc1Index + 1) % ADC_FILTER_SAMPLES;
+
+    uint32_t filteredValue = adc1Sum / ADC_FILTER_SAMPLES;
+    adc1Value = filteredValue;
+
+    // Hysteresis thresholds
+    uint32_t high = ADC1_THRESHOLD + ADC_HYSTERESIS;
+    uint32_t low  = ADC1_THRESHOLD - ADC_HYSTERESIS;
+
+    // Rising-edge detection with hysteresis
+    if(adc1Prev <= high && filteredValue > high)
+        adc1RisingEdge = true;
+
+    // Falling-edge detection with hysteresis
+
+    if(adc1Prev >= low && filteredValue < low)
+        adc1FallingEdge = true;
+
+    adc1Prev = filteredValue;
+}
+
+
+
+// Rutinas de interrupci�n de pulsadores
+// Boton Izquierdo: modifica  ciclo de trabajo en CYCLE_INCREMENTS para el servo conectado a PF2, hasta llegar a  COUNT_1MS
+// Boton Derecho: modifica  ciclo de trabajo en CYCLE_INCREMENTS para el servo conectado a PF2, hasta llegar a COUNT_2MS
+
+void GPIOFIntHandler(void)
+{
+    int32_t i32Status = GPIOIntStatus(GPIO_PORTF_BASE,ALL_BUTTONS);
+    // Boton Izquierdo: reduce ciclo de trabajo en CYCLE_INCREMENTS para el servo conectado a PF4, hasta llegar a MINCOUNT
+    if(((i32Status & LEFT_BUTTON) == LEFT_BUTTON)){
+        iniciar_secuencia_cuadrado();
+
+    }
+    // Boton Derecho: aumenta ciclo de trabajo en CYCLE_INCREMENTS para el servo conectado a PF4, hasta llegar a MAXCOUNT
+    if(((i32Status & RIGHT_BUTTON) == RIGHT_BUTTON)){ //Se ha pulsado boton derecho
+
+        mover_robot(WHEEL_CIRCUMFERENCE_CM);
+    }
+    GPIOIntClear(GPIO_PORTF_BASE,ALL_BUTTONS);  //limpiamos flags
+}
+
+void Timer0A_Handler(void) {
+  //Añadida para que no de fallo al linkear
 }
