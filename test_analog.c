@@ -32,8 +32,8 @@
 #define ADC1_THRESHOLD 1985  // Threshold for ADC1 (PD1/AIN6) //rueda izquierda 1.6
 #define ADC_HYSTERESIS       20  // adjust based on noise level
 
-#define NUM_STEPS_PER_TURN_RD 18  // Threshold for ADC1 (PD1/AIN6) //rueda izquierda 1.6
-#define NUM_STEPS_PER_TURN_RI 18  // Threshold for ADC1 (PD1/AIN6) //rueda izquierda 1.6
+#define NUM_STEPS_PER_TURN_RD 7  // Threshold for ADC1 (PD1/AIN6) //rueda izquierda 1.6
+#define NUM_STEPS_PER_TURN_RI 7  // Threshold for ADC1 (PD1/AIN6) //rueda izquierda 1.6
 
 // ===================== Global Variables =====================
 volatile uint32_t adc0Value;
@@ -75,8 +75,8 @@ void ADC0Seq2_Handler(void);
 //**********************MOTORES
 
 #define PERIOD_PWM 12499 // (625KHz/50 Hz) -1   // TODO: Ciclos de reloj para conseguir una se�al peri�dica de 50Hz (seg�n reloj de perif�rico usado)
-                            // PERIOD_PWM se obtendr�a como (pwm_clk / 50) - 1);  donde 50 es la frecuencia a obtener; y pwm_clk es la frecuencia de reloj del modulo PWM/Timer
-                            // (se determina con SysCtlClockSet y  SysCtlPWMClockSet en el generador PWM; y SysCtlClockSet y las funciones de preescalado en los timers)
+// PERIOD_PWM se obtendr�a como (pwm_clk / 50) - 1);  donde 50 es la frecuencia a obtener; y pwm_clk es la frecuencia de reloj del modulo PWM/Timer
+// (se determina con SysCtlClockSet y  SysCtlPWMClockSet en el generador PWM; y SysCtlClockSet y las funciones de preescalado en los timers)
 #define COUNT_1MS 624   // TODO: Ciclos en el ciclo de trabajo para amplitud de pulso de 1ms (max velocidad en un sentido)
 //#define STOPCOUNT_RD 849 // (625KHz *1.52ms) -1 = 949 // TODO: Ciclos en el ciclo de trabajo  para amplitud de pulso de parada (1.52ms)
 
@@ -138,8 +138,15 @@ const uint32_t STOPCOUNT_RD =965;
 
 // Asume 1.5ms STOP, 2.0ms FWD, 1.0ms REV y un período de 20ms (50Hz)
 // 1.5ms / 20ms = 7.5% -> Duty = 0.075 * LOAD
-#define FWD_DUTY  (uint32_t)  700 // Ejemplo: 2.0ms (Avance)
-#define REV_DUTY  (uint32_t)    1200 // Ejemplo: 1.0ms (Reversa)
+//#define FWD_DUTY  (uint32_t)  700 // Ejemplo: 2.0ms (Avance)
+//#define REV_DUTY  (uint32_t)    1200 // Ejemplo: 1.0ms (Reversa)
+#define INCREMENT 200
+
+#define FWD_DUTY_RI STOPCOUNT_RI-INCREMENT
+#define FWD_DUTY_RD STOPCOUNT_RD-INCREMENT
+
+#define REV_DUTY_RI STOPCOUNT_RI+INCREMENT
+#define REV_DUTY_RD STOPCOUNT_RD+INCREMENT
 
 
 // --- Máquina de Estados del Robot ---
@@ -220,51 +227,51 @@ int main(void)
 
 
     ui32DutyCycle1 = STOPCOUNT_RD; // Inicializo el ciclo de trabajo al estado de reposo del servo.
-      ui32DutyCycle2 = STOPCOUNT_RI;
+    ui32DutyCycle2 = STOPCOUNT_RI;
 
-      SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ); // Reloj del sistema a 40MHz;     // Elegir reloj adecuado para los valores de ciclos sean de tama�o soportable (cantidades menores de 16bits). Max frecuencia: 80MHz
+    SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ); // Reloj del sistema a 40MHz;     // Elegir reloj adecuado para los valores de ciclos sean de tama�o soportable (cantidades menores de 16bits). Max frecuencia: 80MHz
 
     // Configura pulsadores placa TIVA (int. por flanco de bajada)
-      ButtonsInit();
-          GPIOIntTypeSet(GPIO_PORTF_BASE, ALL_BUTTONS,GPIO_BOTH_EDGES);
-          GPIOIntEnable(GPIO_PORTF_BASE,ALL_BUTTONS);
-          IntEnable(INT_GPIOF);
+    ButtonsInit();
+    GPIOIntTypeSet(GPIO_PORTF_BASE, ALL_BUTTONS,GPIO_BOTH_EDGES);
+    GPIOIntEnable(GPIO_PORTF_BASE,ALL_BUTTONS);
+    IntEnable(INT_GPIOF);
 
     // Configuracion  ondas PWM: frecuencia 50Hz, anchura inicial= valor STOPCOUNT, 1520us para salida por PF2, y COUNT_STOP para salida por PF3(o puedes poner otro valor si quieres que se mueva)
-      // Opcion 1: Usar un Timer en modo PWM (ojo! Los timers PWM solo soportan cuentas
-      //  de 16 bits, a menos que us�is un prescaler/timer extension)
-      // Opcion 2: Usar un m�dulo PWM(no dado en Sist. Empotrados pero mas sencillo)
-      //  SysCtlPWMClockSet(???);
+    // Opcion 1: Usar un Timer en modo PWM (ojo! Los timers PWM solo soportan cuentas
+    //  de 16 bits, a menos que us�is un prescaler/timer extension)
+    // Opcion 2: Usar un m�dulo PWM(no dado en Sist. Empotrados pero mas sencillo)
+    //  SysCtlPWMClockSet(???);
 
 
-      SysCtlPWMClockSet(SYSCTL_PWMDIV_64);
+    SysCtlPWMClockSet(SYSCTL_PWMDIV_64);
 
-      SysCtlPeripheralEnable(SYSCTL_PERIPH_PWM1); //Habilita modulo PWM
-      SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);    // Habilita puerto salida para se�al PWM (ver en documentacion que pin se corresponde a cada m�dulo PWM)
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_PWM1); //Habilita modulo PWM
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);    // Habilita puerto salida para se�al PWM (ver en documentacion que pin se corresponde a cada m�dulo PWM)
 
-      // Rueda 1
-      GPIOPinTypePWM(GPIO_PORTF_BASE, GPIO_PIN_2);
-      GPIOPinConfigure(GPIO_PF2_M1PWM6);
+    // Rueda 1
+    GPIOPinTypePWM(GPIO_PORTF_BASE, GPIO_PIN_2);
+    GPIOPinConfigure(GPIO_PF2_M1PWM6);
 
-      // Rueda 2
-      GPIOPinTypePWM(GPIO_PORTF_BASE, GPIO_PIN_3);
-      GPIOPinConfigure(GPIO_PF3_M1PWM7);
+    // Rueda 2
+    GPIOPinTypePWM(GPIO_PORTF_BASE, GPIO_PIN_3);
+    GPIOPinConfigure(GPIO_PF3_M1PWM7);
 
-         // pwm_clk = SysCtlClockGet() / 64;  // 64, ya que es el factor de divisi�n del reloj de PWM respecto al reloj del sistema(SYSCTL_PWMDIV_64)
-                                               // Si hubiesemos escogido otro SYSCTL_PWMDIV_XX, dividir�amos entre XX en vez de 64
-             //val_load = (pwm_clk /PWM_BASE_FREQ  ) - 1; //IGUAL QUE PERIOD_PWM   //Valor del contador para la freq. pwm. En este caso --> 625Khz/50 = 6250-1: este valor NUNCA puede ser mayor que 0xFFFF!!
-                                                         // Si te sale mayor, deberias usar un factor de divisi�n mayor (SYSCTL_PWMDIV_XX), o un reloj del sistema mas lento (SysCtlClockSet)
+    // pwm_clk = SysCtlClockGet() / 64;  // 64, ya que es el factor de divisi�n del reloj de PWM respecto al reloj del sistema(SYSCTL_PWMDIV_64)
+    // Si hubiesemos escogido otro SYSCTL_PWMDIV_XX, dividir�amos entre XX en vez de 64
+    //val_load = (pwm_clk /PWM_BASE_FREQ  ) - 1; //IGUAL QUE PERIOD_PWM   //Valor del contador para la freq. pwm. En este caso --> 625Khz/50 = 6250-1: este valor NUNCA puede ser mayor que 0xFFFF!!
+    // Si te sale mayor, deberias usar un factor de divisi�n mayor (SYSCTL_PWMDIV_XX), o un reloj del sistema mas lento (SysCtlClockSet)
 
-             PWMGenConfigure(PWM1_BASE, PWM_GEN_3, PWM_GEN_MODE_DOWN);   // M�dulo PWM contara hacia abajo
-             PWMGenPeriodSet(PWM1_BASE, PWM_GEN_3, PERIOD_PWM);    // Carga la cuenta que establece la frecuencia de la se�al PWM
+    PWMGenConfigure(PWM1_BASE, PWM_GEN_3, PWM_GEN_MODE_DOWN);   // M�dulo PWM contara hacia abajo
+    PWMGenPeriodSet(PWM1_BASE, PWM_GEN_3, PERIOD_PWM);    // Carga la cuenta que establece la frecuencia de la se�al PWM
 
-//             PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6, ui32DutyCycle1);  // Establece el ciclo de trabajo R1
-//             PWMPulseWidthSet(PWM1_BASE, PWM_OUT_7, ui32DutyCycle2);  // Establece el ciclo de trabajo R2
+    //             PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6, ui32DutyCycle1);  // Establece el ciclo de trabajo R1
+    //             PWMPulseWidthSet(PWM1_BASE, PWM_OUT_7, ui32DutyCycle2);  // Establece el ciclo de trabajo R2
 
-             PWMOutputState(PWM1_BASE, PWM_OUT_6_BIT, true); // Habilita la salida de la se�al R1
-             PWMOutputState(PWM1_BASE, PWM_OUT_7_BIT, true); // Habilita la salida de la se�al R2
+    PWMOutputState(PWM1_BASE, PWM_OUT_6_BIT, true); // Habilita la salida de la se�al R1
+    PWMOutputState(PWM1_BASE, PWM_OUT_7_BIT, true); // Habilita la salida de la se�al R2
 
-             PWMGenEnable(PWM1_BASE, PWM_GEN_3); //Habilita/pone en marcha el generador PWM
+    PWMGenEnable(PWM1_BASE, PWM_GEN_3); //Habilita/pone en marcha el generador PWM
 
 
 
@@ -282,6 +289,7 @@ int main(void)
     while(1)
     {
 
+
         Robot_Update();
         Sequence_Update();
         // Trigger ADC conversions
@@ -289,9 +297,9 @@ int main(void)
         ADCProcessorTrigger(ADC0_BASE, 2);
 
         static uint8_t checkEdgeRD=0;
-            static uint8_t checkEdgeRI=0;
-            static uint8_t flagLedRI=0;
-            static uint8_t flagLedRD=0;
+        static uint8_t checkEdgeRI=0;
+        static uint8_t flagLedRI=0;
+        static uint8_t flagLedRD=0;
 
         // Optional small delay (~10ms)
         // SysCtlDelay(SysCtlClockGet()/100);
@@ -493,12 +501,12 @@ void mover_robot(float c) {
     // Iniciar movimiento y ALMACENAR la dirección
     if (c > 0.0f) {
         // Hacia adelante
-        g_running_duty_RD = FWD_DUTY;
-        g_running_duty_RI = REV_DUTY;
+        g_running_duty_RD = FWD_DUTY_RD;
+        g_running_duty_RI = REV_DUTY_RI;
     } else {
         // Hacia atrás (c < 0.0f)
-        g_running_duty_RD = REV_DUTY;
-        g_running_duty_RI = FWD_DUTY;
+        g_running_duty_RD = REV_DUTY_RD;
+        g_running_duty_RI = FWD_DUTY_RI;
     }
 
     // Establecer estado y aplicar velocidad inicial
@@ -537,13 +545,13 @@ void girar_robot(float g) {
     if (g > 0.0f) {
         // Giro antihorario (izquierda)
         // Rueda derecha (RD) avanza, Rueda izquierda (RI) retrocede
-        g_running_duty_RD = FWD_DUTY;
-        g_running_duty_RI = FWD_DUTY;
+        g_running_duty_RD = FWD_DUTY_RD;
+        g_running_duty_RI = FWD_DUTY_RI;
     } else {
         // Giro horario (derecha) (g < 0.0f)
         // Rueda derecha (RD) retrocede, Rueda izquierda (RI) avanza
-        g_running_duty_RD = REV_DUTY;
-        g_running_duty_RI = REV_DUTY;
+        g_running_duty_RD = REV_DUTY_RD;
+        g_running_duty_RI = REV_DUTY_RI;
     }
 
     // Establecer estado y aplicar velocidad inicial
@@ -589,26 +597,28 @@ void Robot_Update(void) {
     if (done_RD) {
         // La rueda RD ha terminado, debe PARAR.
         next_duty_RD = STOPCOUNT_RD;
+        next_duty_RI = STOPCOUNT_RI;
     } else {
         // La rueda RD no ha terminado, debe SEGUIR MOVIÉNDOSE.
         // ¿En qué dirección? En la que guardamos al inicio.
         next_duty_RD = g_running_duty_RD;
-    }
-
-    // --- Decidir Rueda Izquierda (RI) ---
-    if (done_RI) {
-        // La rueda RI ha terminado, debe PARAR.
-        next_duty_RI = STOPCOUNT_RI;
-    } else {
-        // La rueda RI no ha terminado, debe SEGUIR MOVIÉNDOSE.
         next_duty_RI = g_running_duty_RI;
     }
+
+//    // --- Decidir Rueda Izquierda (RI) ---
+//    if (done_RI) {
+//        // La rueda RI ha terminado, debe PARAR.
+//        next_duty_RI = STOPCOUNT_RI;
+//    } else {
+//        // La rueda RI no ha terminado, debe SEGUIR MOVIÉNDOSE.
+//        next_duty_RI = g_running_duty_RI;
+//    }
 
     // 2. Aplicar las velocidades (una podría ser STOP y la otra no)
     Set_Motor_Speeds(next_duty_RI, next_duty_RD);
 
     // 3. Comprobar si AMBOS han terminado para liberar la máquina de estados
-    if (done_RD && done_RI) {
+    if (done_RD) { //Poner done_RD && done_RI si están los dos encoders puestos
         // Ambas ruedas están paradas, el robot está 'IDLE'.
         g_robot_state = ROBOT_IDLE;
 
@@ -695,7 +705,8 @@ void GPIOFIntHandler(void)
     int32_t i32Status = GPIOIntStatus(GPIO_PORTF_BASE,ALL_BUTTONS);
     // Boton Izquierdo: reduce ciclo de trabajo en CYCLE_INCREMENTS para el servo conectado a PF4, hasta llegar a MINCOUNT
     if(((i32Status & LEFT_BUTTON) == LEFT_BUTTON)){
-        iniciar_secuencia_cuadrado();
+       iniciar_secuencia_cuadrado();
+        //girar_robot(180);
 
     }
     // Boton Derecho: aumenta ciclo de trabajo en CYCLE_INCREMENTS para el servo conectado a PF4, hasta llegar a MAXCOUNT
@@ -707,5 +718,5 @@ void GPIOFIntHandler(void)
 }
 
 void Timer0A_Handler(void) {
-  //Añadida para que no de fallo al linkear
+    //Añadida para que no de fallo al linkear
 }
