@@ -336,35 +336,35 @@ int main(void)
         }
 
         // ================== ADC1 (Left Wheel) ==================
-        if(adc1FallingEdge && checkEdgeRI == 1)
-        {
-            adc1FallingEdge = false;  // Clear after using
-            checkEdgeRI = 0;           // Reset pending rising edge flag
-            counterRI++;
-            counterWholeTurnsRI = counterRI / NUM_STEPS_PER_TURN_RI;
-
-            if(counterRI % NUM_STEPS_PER_TURN_RI == 0)
-            {
-                // Toggle yellow LED
-                static uint8_t flagLedRI = 0;
-                if(flagLedRI == 0)
-                {
-
-                    flagLedRI = 1;
-                }
-                else
-                {
-
-                    flagLedRI = 0;
-                }
-            }
-        }
-
-        if(adc1RisingEdge)
-        {
-            adc1RisingEdge = false; // Clear after processing
-            checkEdgeRI = 1;        // Mark that a rising edge occurred
-        }
+//        if(adc1FallingEdge && checkEdgeRI == 1)
+//        {
+//            adc1FallingEdge = false;  // Clear after using
+//            checkEdgeRI = 0;           // Reset pending rising edge flag
+//            counterRI++;
+//            counterWholeTurnsRI = counterRI / NUM_STEPS_PER_TURN_RI;
+//
+//            if(counterRI % NUM_STEPS_PER_TURN_RI == 0)
+//            {
+//                // Toggle yellow LED
+//                static uint8_t flagLedRI = 0;
+//                if(flagLedRI == 0)
+//                {
+//
+//                    flagLedRI = 1;
+//                }
+//                else
+//                {
+//
+//                    flagLedRI = 0;
+//                }
+//            }
+//        }
+//
+//        if(adc1RisingEdge)
+//        {
+//            adc1RisingEdge = false; // Clear after processing
+//            checkEdgeRI = 1;        // Mark that a rising edge occurred
+//        }
     }
 
 
