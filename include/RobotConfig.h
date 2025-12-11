@@ -3,7 +3,7 @@
  * @brief Configuración Hardware Abstraction Layer (HAL) para SumoBOT.
  * @details Define el mapeo de pines, constantes del sistema, calibración de servos
  * y umbrales de sensores para Tiva C TM4C123GH6PM.
- * * @author SumoBOT Architect
+ * * @author Alejandro Moyano Crespillo (AleSMC)
  * @version 1.0.0
  */
 

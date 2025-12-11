@@ -52,35 +52,33 @@ static uint32_t _map_speed(int8_t speed) {
 // --- IMPLEMENTACIÓN API PÚBLICA ---
 
 void Motor_Init(void) {
-    // 1. Configuración del Reloj (40 MHz)
-    SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
 
-    // 2. Configurar Divisor PWM (Requisito Hardware: /64)
+    // 1. Configurar Divisor PWM (Requisito Hardware: /64)
     SysCtlPWMClockSet(SYSCTL_PWMDIV_64);
 
-    // 3. Habilitar Periféricos (Definidos en HAL)
+    // 2. Habilitar Periféricos (Definidos en HAL)
     SysCtlPeripheralEnable(MOTORS_PWM_PERIPH);
     SysCtlPeripheralEnable(MOTORS_GPIO_PERIPH);
 
     // Espera activa segura (Wait for ready)
     while(!SysCtlPeripheralReady(MOTORS_PWM_PERIPH));
 
-    // 4. Configurar Pines GPIO como PWM
+    // 3. Configurar Pines GPIO como PWM
     GPIOPinTypePWM(MOTORS_GPIO_BASE, MOTOR_LEFT_PIN | MOTOR_RIGHT_PIN);
     
     // Asignación de señales a pines (Pin Muxing)
     GPIOPinConfigure(GPIO_PF2_M1PWM6);
     GPIOPinConfigure(GPIO_PF3_M1PWM7);
 
-    // 5. Configurar Generador PWM 3 (Controla PWM6 y PWM7)
+    // 4. Configurar Generador PWM 3 (Controla PWM6 y PWM7)
     PWMGenConfigure(MOTORS_PWM_BASE, PWM_GEN_3, PWM_GEN_MODE_DOWN);
     PWMGenPeriodSet(MOTORS_PWM_BASE, PWM_GEN_3, PWM_PERIOD_TICKS);
 
-    // 6. Estado Inicial: Motores Parados
+    // 5. Estado Inicial: Motores Parados
     PWMPulseWidthSet(MOTORS_PWM_BASE, MOTOR_LEFT_PWM_OUT, PWM_STOP_TICKS);
     PWMPulseWidthSet(MOTORS_PWM_BASE, MOTOR_RIGHT_PWM_OUT, PWM_STOP_TICKS);
 
-    // 7. Habilitar Salidas y Generador
+    // 6. Habilitar Salidas y Generador
     PWMOutputState(MOTORS_PWM_BASE, MOTOR_LEFT_PWM_BIT | MOTOR_RIGHT_PWM_BIT, true);
     PWMGenEnable(MOTORS_PWM_BASE, PWM_GEN_3);
 }
