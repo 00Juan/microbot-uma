@@ -111,5 +111,27 @@
 
 #define LED_RED_ON() GPIOPinWrite(LED_BASE, LED_RED_PIN, LED_RED_PIN)
 #define LED_RED_OFF() GPIOPinWrite(LED_BASE, LED_RED_PIN, 0)
+/* =================================================================================
+ * 6. CONFIGURACIÓN ODOMETRÍA (ENCODERS CASEROS)
+ * ================================================================================= */
+/* Pines para interrupciones GPIO (PC5 y PC6 son seguros) */
+#define ENCODER_GPIO_PERIPH     SYSCTL_PERIPH_GPIOC
+#define ENCODER_GPIO_BASE       GPIO_PORTC_BASE
+#define ENCODER_LEFT_PIN        GPIO_PIN_5
+#define ENCODER_RIGHT_PIN       GPIO_PIN_6
+#define ENCODER_INT_LEFT        INT_GPIOC  // Vector de interrupción Puerto C
+
+/* Constantes Físicas (CALIBRAR CON EL ROBOT REAL) */
+#define WHEEL_DIAMETER_CM       4.0f    // Diámetro de la rueda (cm)
+#define WHEEL_PERIMETER_CM      (WHEEL_DIAMETER_CM * 3.14159f)
+#define STRIPES_COUNT           8       // Número de franjas negras en el disco
+#define TICKS_PER_REV           (STRIPES_COUNT * 2) // *2 si contamos blanco->negro y negro->blanco
+
+/* Distancia entre ruedas (Ancho del robot) */
+#define WHEEL_BASE_CM           10.0f   // 'l' en tu fórmula
+
+/* Factor de conversión: Cuántos cm avanza el robot por cada "Tick" del encoder */
+#define CM_PER_TICK             (WHEEL_PERIMETER_CM / (float)TICKS_PER_REV)
+
 
 #endif /* ROBOT_CONFIG_H */
