@@ -112,6 +112,18 @@ Los servos trucados pueden tener una ligera deriva. Si al iniciar el robot (coma
     3.  Configurar `LINE_THRESHOLD_TICKS` en el punto medio.
   - _Nota:_ Prioridad P0 (Survive) en la Máquina de Estados.
 
+### ⚠️ Limitaciones de Hardware: Asunción de Simetría Mecánica
+
+Este firmware opera bajo la arquitectura **Single-Encoder (PC5 - Izquierda)**.
+Al carecer de sensor en la rueda derecha, el algoritmo de control asume **Simetría Mecánica Perfecta**:
+
+> **Hipótesis:** _"Si la rueda izquierda ha avanzado 10cm, la física del robot garantiza que la rueda derecha también habrá avanzado 10cm al aplicarse el mismo PWM."_
+
+**Riesgos conocidos:**
+
+1.  **Deriva (Drift):** Si la rueda derecha patina o el motor tiene menos potencia, el robot se desviará en arco, pero el software creerá que va recto.
+2.  **Terreno:** Solo válido en superficies homogéneas (Tatami limpio).
+
 ---
 
 ## 🛡️ Normativa (Mini-Sumo)

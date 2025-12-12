@@ -112,4 +112,28 @@
 #define LED_RED_ON() GPIOPinWrite(LED_BASE, LED_RED_PIN, LED_RED_PIN)
 #define LED_RED_OFF() GPIOPinWrite(LED_BASE, LED_RED_PIN, 0)
 
+/* =================================================================================
+ * 6. CONFIGURACIÓN ODOMETRÍA (SINGLE ENCODER CNY70 - PC5)
+ * ================================================================================= */
+// Usamos PC5 (Interrupción Digital)
+#define ENCODER_GPIO_PERIPH     SYSCTL_PERIPH_GPIOC
+#define ENCODER_GPIO_BASE       GPIO_PORTC_BASE
+#define ENCODER_PIN             GPIO_PIN_5
+#define ENCODER_INT             INT_GPIOC
+
+// --- FÍSICA DEL ROBOT (CALIBRAR) ---
+// Radio de la rueda en cm
+#define WHEEL_RADIUS_CM         2.0f   
+// Distancia entre el centro de las dos ruedas (Ancho del robot)
+#define WHEEL_BASE_CM           10.0f  
+
+// Resolución del Disco Encoder (Franjas negras)
+#define STRIPES_COUNT           8      
+// Interrupción en ambos flancos (Blanco->Negro y Negro->Blanco) = Doble resolución
+#define TICKS_PER_REV           (STRIPES_COUNT * 2) 
+
+// Cálculos automáticos (Perímetro y cm por tick)
+#define WHEEL_PERIMETER_CM      (2.0f * 3.141592f * WHEEL_RADIUS_CM)
+#define CM_PER_TICK             (WHEEL_PERIMETER_CM / (float)TICKS_PER_REV)
+
 #endif /* ROBOT_CONFIG_H */
