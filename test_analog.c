@@ -98,6 +98,8 @@ const uint32_t STOPCOUNT_RI =945;
 const uint32_t STOPCOUNT_RD =965;
 
 
+
+
 //**********CONTROL DEL ROBOT
 
 
@@ -183,6 +185,21 @@ volatile SequenceState g_current_sequence = SEQ_IDLE;
 volatile uint8_t g_sequence_step = 0; // Para contar los 8 pasos (4x mover, 4x girar)
 
 
+// --- Global Variables & Prototypes ---
+volatile uint32_t g_ui32PortE_Presses = 0; // Counter for Port E buttons
+void PortE_IntHandler(void);               // Prototype for the new ISR
+
+
+
+#define WHISKER_R             1
+#define WHISKER_L            2
+
+volatile int stsWhiskerR=0;
+volatile int stsWhiskerL=0;
+volatile uint32_t stsSharp=0;
+void ADC0Seq1_Handler(void);
+
+
 
 void Robot_Init(void);
 void mover_robot(float c);
@@ -225,11 +242,50 @@ int main(void)
     ADCIntRegister(ADC0_BASE, 2, ADC0Seq2_Handler);
     ADCIntEnable(ADC0_BASE, 2);
 
+    // ---- NEW: Configure PD3 (AIN4) as analog input ----
+        // We add PD3 to the configuration. No new Port Enable needed!
+        GPIOPinTypeADC(GPIO_PORTD_BASE, GPIO_PIN_3);
+        GPIOPadConfigSet(GPIO_PORTD_BASE, GPIO_PIN_3,
+                         GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_ANALOG);
+
+        // ---- NEW: ADC Sequencer 1 -> PD3 -> AIN4 ----
+            // We use Sequencer 1 because Seq 3 and 2 are taken.
+            ADCSequenceConfigure(ADC0_BASE, 1, ADC_TRIGGER_PROCESSOR, 0);
+
+            // Configure step 0 of Seq 1 to read Channel 4 (AIN4 = PD3)
+            ADCSequenceStepConfigure(ADC0_BASE, 1, 0, ADC_CTL_CH4 | ADC_CTL_IE | ADC_CTL_END);
+
+            ADCSequenceEnable(ADC0_BASE, 1);
+            ADCIntClear(ADC0_BASE, 1);
+            ADCIntRegister(ADC0_BASE, 1, ADC0Seq1_Handler); // Don't forget to create this function!
+            ADCIntEnable(ADC0_BASE, 1);
+
 
     ui32DutyCycle1 = STOPCOUNT_RD; // Inicializo el ciclo de trabajo al estado de reposo del servo.
     ui32DutyCycle2 = STOPCOUNT_RI;
 
     SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ); // Reloj del sistema a 40MHz;     // Elegir reloj adecuado para los valores de ciclos sean de tama�o soportable (cantidades menores de 16bits). Max frecuencia: 80MHz
+
+
+
+    // --- 3. NEW: Configure Port E (PE0 & PE1) for Interrupts ---
+        // We do this here so it uses the final 40MHz clock.
+        SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);       // Enable Port E
+        while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOE)); // Wait for ready
+
+        // Configure PE0 and PE1 as Inputs
+        GPIOPinTypeGPIOInput(GPIO_PORTE_BASE, GPIO_PIN_2 | GPIO_PIN_1);
+
+        // Enable Internal Pull-Up Resistors (Since buttons connect to Ground)
+        GPIOPadConfigSet(GPIO_PORTE_BASE, GPIO_PIN_1 | GPIO_PIN_2,
+                         GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
+
+        // Register and Enable Port E Interrupts
+//        GPIOIntRegister(GPIO_PORTE_BASE, PortE_IntHandler); // Register ISR
+//        GPIOIntTypeSet(GPIO_PORTE_BASE, GPIO_PIN_2 | GPIO_PIN_1, GPIO_FALLING_EDGE); // Trigger on Press
+//        GPIOIntEnable(GPIO_PORTE_BASE, GPIO_PIN_2 | GPIO_PIN_1); // Enable Pins
+
+
 
     // Configura pulsadores placa TIVA (int. por flanco de bajada)
     ButtonsInit();
@@ -284,14 +340,59 @@ int main(void)
 
     Robot_Init(); // Inicializa el estado del robot
 
-
+    int contResetWhisker=0;
 
     while(1)
     {
 
-
+        ADCProcessorTrigger(ADC0_BASE, 1);
         Robot_Update();
         Sequence_Update();
+
+        // 1. POLL THE WHISKERS (Digital Read)
+                // We read the pins directly every time the loop runs.
+                int32_t i32PinValues = GPIOPinRead(GPIO_PORTE_BASE, GPIO_PIN_1 | GPIO_PIN_2);
+
+                // Check PE2 (Right Whisker) - Low (0) means Pressed
+                if( (i32PinValues & GPIO_PIN_2) == 0 )
+                {
+                    stsWhiskerR = 1;
+                }
+                else
+                {
+                    stsWhiskerR = 0;
+                }
+
+                // Check PE1 (Left Whisker) - Low (0) means Pressed
+                if( (i32PinValues & GPIO_PIN_1) == 0 )
+                {
+                    stsWhiskerL = 1;
+                }
+                else
+                {
+                    stsWhiskerL = 0;
+                }
+
+
+
+        if(adc1Value>1800 || stsWhiskerR==1 ||stsWhiskerL==1 || stsSharp>2000 )
+        {
+            mover_robot(-30);
+
+
+
+        }
+        else
+        {
+            mover_robot(3);
+            contResetWhisker++;
+            contResetWhisker=8;
+            contResetWhisker=9;
+        }
+
+
+
+
         // Trigger ADC conversions
         ADCProcessorTrigger(ADC0_BASE, 3);
         ADCProcessorTrigger(ADC0_BASE, 2);
@@ -335,36 +436,7 @@ int main(void)
             checkEdgeRD = 1;        // Mark that a rising edge occurred
         }
 
-        // ================== ADC1 (Left Wheel) ==================
-//        if(adc1FallingEdge && checkEdgeRI == 1)
-//        {
-//            adc1FallingEdge = false;  // Clear after using
-//            checkEdgeRI = 0;           // Reset pending rising edge flag
-//            counterRI++;
-//            counterWholeTurnsRI = counterRI / NUM_STEPS_PER_TURN_RI;
-//
-//            if(counterRI % NUM_STEPS_PER_TURN_RI == 0)
-//            {
-//                // Toggle yellow LED
-//                static uint8_t flagLedRI = 0;
-//                if(flagLedRI == 0)
-//                {
-//
-//                    flagLedRI = 1;
-//                }
-//                else
-//                {
-//
-//                    flagLedRI = 0;
-//                }
-//            }
-//        }
-//
-//        if(adc1RisingEdge)
-//        {
-//            adc1RisingEdge = false; // Clear after processing
-//            checkEdgeRI = 1;        // Mark that a rising edge occurred
-//        }
+
     }
 
 
@@ -702,7 +774,7 @@ void ADC0Seq2_Handler(void)
 
 void GPIOFIntHandler(void)
 {
-    int32_t i32Status = GPIOIntStatus(GPIO_PORTF_BASE,ALL_BUTTONS);
+    int32_t i32Status = GPIOIntStatus(GPIO_PORTF_BASE,ALL_BUTTONS2);
     // Boton Izquierdo: reduce ciclo de trabajo en CYCLE_INCREMENTS para el servo conectado a PF4, hasta llegar a MINCOUNT
     if(((i32Status & LEFT_BUTTON) == LEFT_BUTTON)){
        iniciar_secuencia_cuadrado();
@@ -714,9 +786,61 @@ void GPIOFIntHandler(void)
 
         mover_robot(WHEEL_CIRCUMFERENCE_CM);
     }
+
+
+
+
+
     GPIOIntClear(GPIO_PORTF_BASE,ALL_BUTTONS);  //limpiamos flags
 }
 
 void Timer0A_Handler(void) {
     //Añadida para que no de fallo al linkear
+}
+
+
+
+// Interrupt Handler for Port E (PE0 and PE1)
+void PortE_IntHandler(void)
+{
+//    uint32_t ui32Status;
+//
+//
+//    // Get interrupt status. True means "return masked status"
+//    ui32Status = GPIOIntStatus(GPIO_PORTE_BASE, true);
+//
+//    // Clear the interrupt flag immediately
+//    GPIOIntClear(GPIO_PORTE_BASE, ui32Status);
+//
+//    // Check if PE0 was the cause
+//    if(ui32Status & GPIO_PIN_2)
+//    {
+//        // TODO: Add code for Button connected to PE0
+//        stsWhiskerR=1;
+//    }
+//
+//    // Check if PE1 was the cause
+//    if(ui32Status & GPIO_PIN_1)
+//    {
+//        // TODO: Add code for Button connected to PE1
+//        stsWhiskerL=1;
+//    }
+}
+
+// ISR for the new PD3 Analog Input
+void ADC0Seq1_Handler(void)
+{
+    uint32_t ui32ADCValuePD3[1];
+
+    // 1. Clear the interrupt flag so it doesn't loop forever
+    ADCIntClear(ADC0_BASE, 1);
+
+    // 2. Read the data from Sequencer 1
+    ADCSequenceDataGet(ADC0_BASE, 1, ui32ADCValuePD3);
+
+    stsSharp=ui32ADCValuePD3[0];
+
+
+    // ui32ADCValuePD3[0] is your new value (0-4095)
+    // Example: g_SensorValue = ui32ADCValuePD3[0];
 }
