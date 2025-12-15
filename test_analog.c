@@ -385,9 +385,6 @@ int main(void)
         else
         {
             mover_robot(3);
-            contResetWhisker++;
-            contResetWhisker=8;
-            contResetWhisker=9;
         }
 
 
