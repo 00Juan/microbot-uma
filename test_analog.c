@@ -142,7 +142,7 @@ const uint32_t STOPCOUNT_RD =965;
 // 1.5ms / 20ms = 7.5% -> Duty = 0.075 * LOAD
 //#define FWD_DUTY  (uint32_t)  700 // Ejemplo: 2.0ms (Avance)
 //#define REV_DUTY  (uint32_t)    1200 // Ejemplo: 1.0ms (Reversa)
-#define INCREMENT 200
+#define INCREMENT 400
 
 #define FWD_DUTY_RI STOPCOUNT_RI-INCREMENT
 #define FWD_DUTY_RD STOPCOUNT_RD-INCREMENT
@@ -374,18 +374,29 @@ int main(void)
                 }
 
 
-
-        if(adc1Value>1800 || stsWhiskerR==1 ||stsWhiskerL==1 || stsSharp>2000 )
-        {
-            mover_robot(-30);
+                static  int sharpLimit= 1000;
 
 
+                if(adc1Value>2500 || stsWhiskerR==1 ||stsWhiskerL==1) //Linea blanca
+                {
+                    mover_robot(-3);
+                    //girar_robot(180);
+                }
+                else if(adc1Value<2500 && (stsWhiskerR==1 ||stsWhiskerL==1))
+                {
+                    girar_robot(90);
 
-        }
-        else
-        {
-            mover_robot(3);
-        }
+                }
+
+                else if(adc1Value<=2500 && ( stsSharp>sharpLimit && stsWhiskerR==0 && stsWhiskerL==0 )) //Sin linea blanca y detecta robot
+                {
+                    mover_robot(3);
+
+                }
+                else if ( adc1Value<=2500 && ( stsSharp< sharpLimit && stsWhiskerR==0 && stsWhiskerL==0))
+                {
+                    girar_robot(45);
+                }
 
 
 
