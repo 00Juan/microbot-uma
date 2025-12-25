@@ -375,28 +375,32 @@ int main(void)
 
 
                 static  int sharpLimit= 1000;
+                static  int sensorWhiteLimit= 700;
 
-
-                if(adc1Value>2500 || stsWhiskerR==1 ||stsWhiskerL==1) //Linea blanca
+                if(adc1Value>sensorWhiteLimit) //Linea blanca
                 {
-                    mover_robot(-3);
+                    mover_robot(-20);
                     //girar_robot(180);
                 }
-                else if(adc1Value<2500 && (stsWhiskerR==1 ||stsWhiskerL==1))
-                {
-                    girar_robot(90);
 
-                }
 
-                else if(adc1Value<=2500 && ( stsSharp>sharpLimit && stsWhiskerR==0 && stsWhiskerL==0 )) //Sin linea blanca y detecta robot
+                else if(adc1Value<=sensorWhiteLimit && ( stsSharp>sharpLimit && stsWhiskerR==0 && stsWhiskerL==0 )) //Sin linea blanca y detecta robot
                 {
                     mover_robot(3);
 
                 }
-                else if ( adc1Value<=2500 && ( stsSharp< sharpLimit && stsWhiskerR==0 && stsWhiskerL==0))
+                else if ( adc1Value<=sensorWhiteLimit && ( stsSharp< sharpLimit && stsWhiskerR==0 && stsWhiskerL==0))
                 {
                     girar_robot(45);
                 }
+                else if(adc1Value<sensorWhiteLimit && (stsWhiskerR==1))
+                {
+                    girar_robot(-45);
+                }
+                else if(adc1Value<sensorWhiteLimit && (stsWhiskerL==1))
+                                {
+                                    girar_robot(45);
+                                }
 
 
 
